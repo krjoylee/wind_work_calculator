@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>태양광 패널 풍하중 계산기</title>
+    <style>
+        :root {
+            --color-primary: #00529b;
+            --color-secondary: #e9ecef;
+            --color-surface: #ffffff;
+            --color-background: #f8f9fa;
+            --color-text: #212529;
+            --color-text-secondary: #6c757d;
+            --color-border: #dee2e6;
+            --color-safe: #28a745;
+            --color-caution: #ffc107;
+            --color-danger: #fd7e14;
+            --color-critical: #dc3545;
+            --radius-base: 0.5rem;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background-color: var(--color-background); color: var(--color-text); line-height: 1.6; }
+        .container { max-width: 900px; margin: 0 auto; padding: 0.5rem;}
+        .header { background-color: var(--color-primary); color: white; padding: 0.5rem 0.5rem; text-align: center; border-bottom: 4px solid var(--color-caution);}
+        .header h1 { margin: 0; font-size: 1.5rem;}
+        .header h2 { margin: 0.1rem 0; font-weight: 300; font-size: 1rem;}
+        .calculator-grid { display: flex; gap: 1rem; flex-wrap: wrap;}
+        .input-panel { min-width: 310px; max-width: 340px;}
+        .results-panel { flex: 1; min-width: 310px;}
+        .form-group { margin-bottom: 1rem;}
+        .form-label { display: block; font-weight: 600; margin-bottom: 0.45rem;}
+        .slider-group, .input-group { display: flex; align-items: center; gap: 1em;}
+        .range-slider { flex-grow: 1;}
+        .number-input, .form-control { width: 68px; padding: 0.35rem; border: 1px solid var(--color-border); border-radius: var(--radius-base); text-align: right;}
+        .unit { font-weight: 500;}
+        .preset-buttons { margin-top: 0.18rem; display: flex; gap: 0.5rem; flex-wrap: wrap;}
+        .btn { padding: 0.24rem 0.8rem; border: 1px solid var(--color-border); border-radius: var(--radius-base); background-color: var(--color-surface); cursor: pointer; transition: background 0.18s;}
+        .btn:hover { background-color: var(--color-secondary); border-color: #aaa;}
+        .btn--sm { padding: 0.19rem 0.6rem; font-size: 0.79rem;}
+        /* SVG 시각화 최소형 */
+        .viz-tiny { width: 310px; height: 120px; margin: 0 auto; display: block;}
+        .simple-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 0.55rem; margin-bottom: 0.65rem;}
+        .result-card { background: var(--color-surface); border-radius: var(--radius-base); border: 1px solid var(--color-border); box-shadow: 0 1px 3px rgba(0,0,0,0.04); text-align: center; padding: 0.5rem 0.3rem;}
+        .result-card h4 { margin: 0; font-size: 1rem; color: var(--color-primary);}
+        .result-value { font-size: 1.22rem; font-weight: 700; color: var(--color-text);}
+        .result-unit { font-size: 0.89rem; color: var(--color-text-secondary);}
+        .formula-explain { font-size: 0.84rem; color: #888;}
+        .safety-status { font-size: 1.1rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: var(--radius-base);}
+        .safety-status.safe { background-color: var(--color-safe); color: white;}
+        .safety-status.caution { background-color: var(--color-caution); color: black;}
+        .safety-status.danger { background-color: var(--color-danger); color: white;}
+        .safety-status.critical { background-color: var(--color-critical); color: white;}
+        .footer { text-align: center; padding: 0.85rem; margin-top: 1rem; background-color: var(--color-secondary); font-size: 0.89rem;}
+    </style>
+</head>
+<body>
+<header class="header">
+    <div class="container">
+        <h1>태양광 풍하중·작업하중 계산기</h1>
+        <h2>Mini Visualization | Dynamic Pressure·Wind Load·Slip</h2>
+    </div>
+</header>
+<main class="main">
+    <div class="container">
+        <div class="calculator-grid">
+            <section class="input-panel">
+                <div class="form-group">
+                    <label class="form-label">풍속 (m/s)</label>
+                    <div class="slider-group">
+                        <input type="range" id="windSpeed" class="range-slider" min="0" max="80" value="30" step="0.1">
+                        <input type="number" id="windSpeedInput" class="number-input" min="0" max="80" value="30" step="0.1">
+                        <span class="unit">m/s</span>
+                    </div>
+                    <div><span id="windSpeedKmh">= 108 km/h</span> / <span id="windSpeedMph">= 67 mph</span></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">공기 밀도</label>
+                    <div class="input-group">
+                        <input type="number" id="airDensity" class="form-control" value="1.225" step="0.001" min="0.8" max="1.4">
+                        <span class="unit">kg/m³</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">패널 면적</label>
+                    <div class="slider-group">
+                        <input type="range" id="panelArea" class="range-slider" min="0.5" max="3.0" value="1.65" step="0.01">
+                        <input type="number" id="panelAreaInput" class="number-input" min="0.5" max="3.0" value="1.65" step="0.01">
+                        <span class="unit">m²</span>
+                    </div>
+                    <div class="preset-buttons">
+                        <button class="btn btn--sm preset-btn" data-area="2.8">대형(2.8)</button>
+                        <button class="btn btn--sm preset-btn" data-area="1.65">주거(1.65)</button>
+                        <button class="btn btn--sm preset-btn" data-area="2.0">상업(2.0)</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">설치 각도</label>
+                    <div class="slider-group">
+                        <input type="range" id="installAngle" class="range-slider" min="0" max="90" value="30" step="1">
+                        <input type="number" id="installAngleInput" class="number-input" min="0" max="90" value="30" step="1">
+                        <span class="unit">°</span>
+                    </div>
+                    <div class="preset-buttons angle-presets">
+                        <button class="btn btn--sm preset-btn" data-angle="10">10°</button>
+                        <button class="btn btn--sm preset-btn" data-angle="20">20°</button>
+                        <button class="btn btn--sm preset-btn" data-angle="30">30°</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">패널 무게</label>
+                    <div class="slider-group">
+                        <input type="range" id="panelWeight" class="range-slider" min="10" max="50" value="35" step="0.5">
+                        <input type="number" id="panelWeightInput" class="number-input" min="10" max="50" value="35" step="0.5">
+                        <span class="unit">kg</span>
+                    </div>
+                </div>
+            </section>
+            <section class="results-panel">
+                <svg id="vizSVG" class="viz-tiny" viewBox="0 0 300 120">
+                    <rect x="0" y="90" width="300" height="4" fill="#dedede"/>
+                    <g id="panelSVG" transform="translate(130,90) rotate(-30)">
+                        <rect x="-40" y="-6" width="80" height="14" fill="#007bff" stroke="#888" stroke-width="2" rx="3"/>
+                    </g>
+                    <line id="windBar" x1="15" y1="25" x2="115" y2="25" stroke="#00529b" stroke-width="5" stroke-linecap="round"/>
+                    <polygon id="windArrow" points="118,25 108,21 108,29" fill="#00529b"/>
+                    <text id="vizAngleText" x="114" y="44" fill="#222" font-size="13" font-weight="bold">각도: 30°</text>
+                    <text id="vizWindText" x="20" y="18" fill="#00529b" font-size="12">풍속 30.0 m/s</text>
+                </svg>
+                <div class="simple-cards">
+                    <div class="result-card">
+                        <h4>동적 압력</h4>
+                        <div class="result-value"><span id="dynamicPressure"></span><span class="result-unit"> Pa</span></div>
+                        <div class="formula-explain">q = 0.5·ρ·V²</div>
+                    </div>
+                    <div class="result-card">
+                        <h4>유효 면적</h4>
+                        <div class="result-value"><span id="effectiveArea"></span><span class="result-unit"> m²</span></div>
+                    </div>
+                    <div class="result-card">
+                        <h4>풍하중</h4>
+                        <div class="result-value"><span id="windForce"></span><span class="result-unit"> N</span></div>
+                        <div class="formula-explain">F = q·A<sub>eff</sub>·C<sub>d</sub></div>
+                    </div>
+                    <div class="result-card">
+                        <h4>풍하중 분해(각도)</h4>
+                        <div class="result-value">
+                            <span id="windForceSlip"></span><span class="result-unit"> N (평행)</span><br>
+                            <span id="windForceNormal"></span><span class="result-unit"> N (수직)</span>
+                        </div>
+                        <div class="formula-explain">F<sub>wind,slip</sub>=F·sinθ | F<sub>wind,normal</sub>=F·cosθ</div>
+                    </div>
+                    <div class="result-card">
+                        <h4>평행 힘 (작업슬립 하중)</h4>
+                        <div class="result-value"><span id="totalSlipKgf"></span><span class="result-unit"> kgf</span></div>
+                    </div>
+                    <div class="result-card">
+                        <h4>수직 힘 (고정하중)</h4>
+                        <div class="result-value"><span id="totalNormalKgf"></span><span class="result-unit"> kgf</span></div>
+                        <div class="result-value"><span id="normalPressure"></span><span class="result-unit"> Pa</span></div>
+                    </div>
+                </div>
+                <div class="result-card">
+                    <h4>종합 안전성 평가</h4>
+                    <div id="safetyStatus" class="safety-status"></div>
+                    <div><small id="safetyReason"></small></div>
+                </div>
+            </section>
+        </div>
+    </div>
+</main>
+<footer class="footer">
+    <strong>참조:</strong> ASCE 7-16, KBC-2016. Cd=1.2, g=9.81m/s²<br>이 페이지는 풍하중에 대한 문제와 작업 안전성평가(안)을 구현 위해 제작 by Leejy@lng-tml.com
+</footer>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // 양방향 실시간 sync
+    const pairs = [
+        ['windSpeed','windSpeedInput'],
+        ['panelArea','panelAreaInput'],
+        ['installAngle','installAngleInput'],
+        ['panelWeight','panelWeightInput'],
+    ];
+    pairs.forEach(([a,b])=>{
+        document.getElementById(a).addEventListener('input', e=>{
+            document.getElementById(b).value = e.target.value;
+            calculate();
+        });
+        document.getElementById(b).addEventListener('input', e=>{
+            document.getElementById(a).value = e.target.value;
+            calculate();
+        });
+    });
+    // 단방향만인 애들
+    ['airDensity'].forEach(id=>{
+        document.getElementById(id).addEventListener('input', calculate);
+    });
+    // preset
+    document.querySelectorAll('.preset-btn').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+            if(btn.dataset.area){
+                document.getElementById('panelArea').value = btn.dataset.area;
+                document.getElementById('panelAreaInput').value = btn.dataset.area;
+            }
+            if(btn.dataset.angle){
+                document.getElementById('installAngle').value = btn.dataset.angle;
+                document.getElementById('installAngleInput').value = btn.dataset.angle;
+            }
+            calculate();
+        });
+    });
+
+    function calculate() {
+        const $ = id => document.getElementById(id);
+        const V = parseFloat($('windSpeedInput').value||0);
+        const rho = parseFloat($('airDensity').value||0);
+        const A = parseFloat($('panelAreaInput').value||0);
+        const theta = parseFloat($('installAngleInput').value||0);
+        const W = parseFloat($('panelWeightInput').value||0);
+        const Cd = 1.2, g = 9.81;
+        const rad = theta * Math.PI/180;
+        const sin = Math.sin(rad), cos = Math.cos(rad), absSin = Math.abs(sin);
+
+        // 동적압력
+        const q = 0.5 * rho * V * V;
+        const A_eff = A * absSin;
+        // 풍하중
+        const F_wind = q * A_eff * Cd;
+        const F_wind_slip = F_wind * sin;
+        const F_wind_normal = F_wind * cos;
+        // 중력
+        const F_g_slip = W * g * sin;
+        const F_g_normal = W * g * cos;
+        // 합성
+        const F_slip_total = F_wind_slip + F_g_slip;
+        const F_normal_total = F_wind_normal + F_g_normal;
+        const slipKgf = F_slip_total / g;
+        const normalKgf = F_normal_total / g;
+        const normalPressure = (A > 0) ? F_normal_total / A : 0;
+
+        // 표출
+        $('dynamicPressure').textContent = isFinite(q)? q.toFixed(1):'-';
+        $('effectiveArea').textContent = isFinite(A_eff)? A_eff.toFixed(2):'-';
+        $('windForce').textContent = isFinite(F_wind)? F_wind.toFixed(1):'-';
+        $('windForceSlip').textContent = isFinite(F_wind_slip)? F_wind_slip.toFixed(1):'-';
+        $('windForceNormal').textContent = isFinite(F_wind_normal)? F_wind_normal.toFixed(1):'-';
+        $('totalSlipKgf').textContent = isFinite(slipKgf)? slipKgf.toFixed(2):'-';
+        $('totalNormalKgf').textContent = isFinite(normalKgf)? normalKgf.toFixed(2):'-';
+        $('normalPressure').textContent = isFinite(normalPressure)? normalPressure.toFixed(1):'-';
+        $('windSpeedKmh').textContent = `= ${isFinite(V)?(V*3.6).toFixed(1):'-'} km/h`;
+        $('windSpeedMph').textContent = `= ${isFinite(V)?(V*2.23694).toFixed(1):'-'} mph`;
+
+        // SVG 연동
+        const panelSVG = $('panelSVG');
+        if(panelSVG) panelSVG.setAttribute('transform', `translate(130,90) rotate(${-theta})`);
+        $('vizAngleText').textContent = `각도: ${theta}°`;
+        $('vizWindText').textContent = `풍속 ${V.toFixed(1)} m/s`;
+        let windBarLen = Math.max(30, Math.min((V/80)*90 + 30, 110));
+        $('windBar').setAttribute('x2', 15 + windBarLen);
+        let arrowX = 15 + windBarLen + 3;
+        $('windArrow').setAttribute('points',`${arrowX},25 ${arrowX-10},21 ${arrowX-10},29`);
+
+        // 안전성 평가
+        const limit_p = 2400, limit_w = 50;
+        const ratio_p = normalPressure / limit_p;
+        const ratio_w = Math.abs(slipKgf) / limit_w;
+        let s = 'safe', r = '풍압·작업하중 모두 안전';
+        if (ratio_p >= 1 || ratio_w >= 1) { s='critical'; r='한계치 초과! (50kgf/2400Pa)'; }
+        else if (ratio_p >= 0.8 || ratio_w >= 0.8) { s='danger'; r='한계 부근! 자세히 검토 필요'; }
+        else if (ratio_p >= 0.5 || ratio_w >= 0.5) { s='caution'; r='주의! 하중이나 압력 다소 증가'; }
+        $('safetyStatus').className = 'safety-status ' + s;
+        $('safetyStatus').textContent = {safe:'✓ 안전', caution:'▲ 주의', danger:'❗ 위험', critical:'☠️ 초과'}[s];
+        $('safetyReason').textContent = r;
+    }
+    // 최초 계산
+    calculate();
+});
+</script>
+</body>
+</html>
